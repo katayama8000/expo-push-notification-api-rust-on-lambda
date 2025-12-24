@@ -1,0 +1,21 @@
+{
+  "dockerComposeFile": ["compose.yml"],
+  "service": "expo-push-notification-api-rust-on-lamda",
+  "workspaceFolder": "/workspace",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "GitHub.copilot",
+        "ms-azuretools.vscode-docker",
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "fill-labs.dependi"
+      ],
+      "settings": {
+        "files.watcherExclude": {
+          "**/target/**": true
+        }
+      }
+    }
+  }
+}
