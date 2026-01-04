@@ -1,5 +1,5 @@
 services:
-  expo-push-notification-api-rust-on-lamda:
+  expo-push-notification-api-rust-on-lambda:
     build:
       context: .
       dockerfile: Dockerfile

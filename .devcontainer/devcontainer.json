@@ -1,6 +1,6 @@
 {
   "dockerComposeFile": ["compose.yml"],
-  "service": "expo-push-notification-api-rust-on-lamda",
+  "service": "expo-push-notification-api-rust-on-lambda",
   "workspaceFolder": "/workspace",
   "customizations": {
     "vscode": {

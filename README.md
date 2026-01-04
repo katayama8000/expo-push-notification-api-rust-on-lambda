@@ -1,6 +1,6 @@
 # Introduction
 
-expo-push-notification-api-rust-on-lamda is a Rust project that implements an AWS Lambda function in Rust.
+expo-push-notification-api-rust-on-lambda is a Rust project that implements an AWS Lambda function in Rust.
 
 ## Prerequisites
 
