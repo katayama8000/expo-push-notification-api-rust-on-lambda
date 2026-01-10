@@ -4,6 +4,7 @@ use expo_push_notification_client::{Expo, ExpoClientOptions, ExpoPushMessage};
 use futures::future::join_all;
 use http::{header::HeaderValue, StatusCode};
 use lambda_http::{Body, Error, Request, Response};
+use lambda_http::RequestExt;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::env;
@@ -33,7 +34,7 @@ pub enum ApiError {
     PushMessageBuild,
 }
 
-/// SSM Parameter Storeから設定を一括で取得します。（ページネーションなし）
+/// gwt secrets from ssm parameter store without pagination
 #[instrument]
 pub async fn get_secrets() -> Result<HashMap<String, String>, ApiError> {
     let ssm_parameter_path = env::var("SSM_PARAMETER_PATH")
@@ -46,7 +47,7 @@ pub async fn get_secrets() -> Result<HashMap<String, String>, ApiError> {
 
     let mut secrets = HashMap::new();
 
-    // ページネーションを削除し、一度のリクエストで取得
+    // Note: This assumes the number of parameters is within the limit of a single response.
     let response = ssm_client
         .get_parameters_by_path()
         .path(ssm_parameter_path.clone())
@@ -62,7 +63,7 @@ pub async fn get_secrets() -> Result<HashMap<String, String>, ApiError> {
         for param in params {
             if let (Some(name), Some(value)) = (param.name, param.value) {
                 info!(parameter_name = %name, "Fetched parameter from SSM");
-                // パスからキー名のみを抽出 (e.g., /expo-push-api/supabase-key -> supabase-key)
+                // Extract only the key name from the path (e.g., /expo-push-api/supabase-key -> supabase-key)
                 if let Some(key) = name.split('/').last() {
                     secrets.insert(key.to_string(), value);
                 }
@@ -125,7 +126,6 @@ pub fn create_error_response(
 
 #[instrument(skip(event))]
 pub async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
-    // 1. APIキーの検証
     let expected_key = env::var("API_KEY").expect("API_KEY not set");
     let expected_key_value =
         HeaderValue::from_str(&expected_key).map_err(|_| ApiError::InvalidApiKey)?;
@@ -139,7 +139,6 @@ pub async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
         "Expo push notification API request received"
     );
 
-    // 2. SSMから設定情報を取得
     let secrets = get_secrets().await?;
     let expo_access_token = secrets
         .get("expo-access-token")
@@ -153,15 +152,14 @@ pub async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
     let body;
     let mut expo_push_tokens = vec![];
 
-    // 3. メソッドに応じて処理を分岐
-    match event.method().as_str() {
-        "GET" => {
+    match event.raw_http_path() {
+        "/scheduled" => {
             title = "25日だよ".to_string();
             body = "パートナーに請求しよう".to_string();
             let supabase_client = initialize_supabase_client(&secrets)?;
             expo_push_tokens = fetch_expo_push_tokens(&supabase_client).await?;
         }
-        "POST" => {
+        "/" => {
             let json_body = extract_body(&event).await?;
             title = json_body["title"]
                 .as_str()
@@ -182,7 +180,7 @@ pub async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
                 return create_error_response(StatusCode::BAD_REQUEST, "Invalid expo push token");
             }
         }
-        _ => return create_error_response(StatusCode::METHOD_NOT_ALLOWED, "Method not allowed"),
+        _ => return create_error_response(StatusCode::NOT_FOUND, "Not Found"),
     }
 
     if expo_push_tokens.is_empty() {
@@ -197,7 +195,7 @@ pub async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
             )?);
     }
 
-    // 4. プッシュ通知メッセージの構築
+        // プッシュ通知メッセージの構築
     info!(
         token_count = expo_push_tokens.len(),
         "Building push notifications"
@@ -213,7 +211,6 @@ pub async fn function_handler(event: Request) -> Result<Response<Body>, Error> {
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    // 5. プッシュ通知の送信
     info!("Sending push notifications");
     let send_futures = messages
         .into_iter()
